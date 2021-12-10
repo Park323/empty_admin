@@ -3,54 +3,54 @@ import yaml
 import requests
 import json
 import cv2
+import config
+
 from coordinates_generator import CoordinatesGenerator
 from colors import *
+
+# Reference: https://github.com/olgarose/ParkingLot
 
 #python main.py --image images/parking_lot_1.png --data data/coordinates_1.yml
 #python main.py --url URL주소
 
 def main():
     args = parse_args()
-    on_server = args.url!=None
-    if on_server : #Get image from server
-        URL = args.url
-        image, annos = get_data(URL)
-    else: #Testing
-        image_file = args.image_file
-        data_file = args.data_file
+    
+    if args.isTest :
+        image_file = config.TEST_IMAGE
+        data_file = config.TEST_YML
         
         image = cv2.imread(image_file).copy()
         with open(data_file, "r") as f:
             yml = yaml.load(f, Loader=yaml.FullLoader)
-        annos = [obj['coordinates'] for obj in yml]
-
+        if yml:
+            annos = [obj['coordinates'] for obj in yml]
+        else:
+            annos = []
+    else:
+        URL = config.SERVER_URL
+        image, annos = get_data(URL)
+        
     if image is not None:
         with open(data_file, "w+") as f:
             generator = CoordinatesGenerator(image, f, annos, COLOR_RED)
-            data = generator.generate(on_server)
+            data = generator.generate(not args.isTest)
             
-    if on_server:
+    if args.isTest:
+        pass
+    else:
         post_data(data, URL)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generates Coordinates File')
 
-    parser.add_argument("--image",
-                        dest="image_file",
-                        required=False,
-                        help="Image file to generate coordinates on")
+    parser.add_argument("--test", '-t',
+                        dest="isTest",
+                        help="Image file to generate coordinates on",
+                        action='store_true')
+    parser.set_defaults(isTest=False)
 
-    parser.add_argument("--data",
-                        dest="data_file",
-                        required=False,
-                        help="Data file to be used with OpenCV")
-    
-    parser.add_argument("--url",
-                        dest="url",
-                        required=False,
-                        help="Server URL")
-    
     return parser.parse_args()
 
 def get_data(URL):

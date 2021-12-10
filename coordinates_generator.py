@@ -7,8 +7,6 @@ from copy import deepcopy
 from operator import itemgetter
 from colors import *
 from drawing_utils import draw_contours
-from sandbox import isin_contours
-
 
 class CoordinatesGenerator:
     KEY_RESET = ord("r")
@@ -18,6 +16,7 @@ class CoordinatesGenerator:
 
     def __init__(self, image, stream, annos, color):
         self.output = []
+        self.table_form = []
         self.outstream = stream
         self.caption = 'ParkingLot'
         self.color = color
@@ -63,6 +62,8 @@ class CoordinatesGenerator:
                 self.initialize_index()
                 self.reset_drawing()     
             elif key == CoordinatesGenerator.KEY_QUIT:
+                if not self.table_form:
+                    self.table_form = [len(self.output)]
                 break
         open_cv.destroyWindow(self.caption)
         
@@ -70,6 +71,8 @@ class CoordinatesGenerator:
             return {'table':self.table_form,
                     'pred_boxes':[obj['coordinates'] for obj in sorted(self.output, key=lambda x: x['id'])]}
         else:    
+            print( {'table':self.table_form,
+                    'pred_boxes':[obj['coordinates'] for obj in sorted(self.output, key=lambda x: x['id'])]} )
             for obj in self.output:
                 self.outstream.write(yml_string(obj['id'], obj['coordinates']))
 
@@ -220,14 +223,17 @@ class CoordinatesGenerator:
             # print(f'\n--------------------------------------\ncandidate chosen: {candidate}')
             new_coords.append(candidate)
         
-            height = np.array(candidate['coordinates']).max(axis=0)[1]-np.array(candidate['coordinates']).min(axis=0)[1]
-            
             idx = 0
             while idx < len(candidates):
+                _boxes = [obj['coordinates'] for obj in new_coords]
+                _centers = [obj['center'] for obj in new_coords]
+                crit = np.array(_centers).mean(axis=0)
+                height = (np.array(_boxes).max(axis=1)-np.array(_boxes).min(axis=1)).mean(axis=0)[1]
+                
                 neighbor = candidates[idx]
                 y = neighbor['center'][1]
-                thres = 1
-                if y >= candidate['center'][1]-thres * height and y <= candidate['center'][1]+thres * height:
+                thres = 0.4
+                if y >= crit[1]-thres * height and y <= crit[1]+thres * height:
                     # print(f'\tneighbor {idx}th : {neighbor}')
                     # print(f'\tcurrent acc idx: {acc_idx}, rest candidates:{len(candidates)}')
                     new_coords.append(candidates.pop(idx))
@@ -242,7 +248,6 @@ class CoordinatesGenerator:
             
             self.table_form.append(len(new_coords))
         self.output = new_output
-        print(self.table_form)
         
 def find_line(c0:list, c1:list, thick=None, dense=256, img_size=None, finite=True, only_corner=False):
     x0, y0 = c0
